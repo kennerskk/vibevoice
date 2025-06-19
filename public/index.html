@@ -639,11 +639,11 @@
 
             // Handle remote stream
             peerConnection.ontrack = (event) => {
-                const remoteAudio = document.createElement('audio');
-                remoteAudio.srcObject = event.streams[0];
-                remoteAudio.autoplay = true;
-                remoteAudio.id = `audio-${userId}`;
-                document.body.appendChild(remoteAudio);
+                const remoteStream = event.streams[0];
+                // ตรวจสอบว่า stream นี้ไม่ใช่ของตัวเอง
+                if (remoteStream.id !== localStream.id) {
+                    remoteAudio.srcObject = remoteStream;
+                }
             };
 
             // Handle ICE candidates

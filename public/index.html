@@ -252,6 +252,102 @@
             cursor: not-allowed;
         }
 
+        .voice-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .mic-btn {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 18px;
+        }
+
+        .mic-btn.inactive {
+            background: #dc3545;
+            color: white;
+        }
+
+        .mic-btn.active {
+            background: #28a745;
+            color: white;
+            animation: pulse 1.5s infinite;
+        }
+
+        .mic-btn:hover {
+            transform: scale(1.1);
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+        }
+
+        .voice-status {
+            font-size: 14px;
+            color: #6c757d;
+        }
+
+        .speaking-indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            background: rgba(40, 167, 69, 0.1);
+            border-radius: 15px;
+            font-size: 12px;
+            color: #28a745;
+        }
+
+        .audio-wave {
+            width: 3px;
+            height: 15px;
+            background: #28a745;
+            margin: 0 1px;
+            animation: wave 1s infinite ease-in-out;
+        }
+
+        .audio-wave:nth-child(2) { animation-delay: 0.1s; }
+        .audio-wave:nth-child(3) { animation-delay: 0.2s; }
+        .audio-wave:nth-child(4) { animation-delay: 0.3s; }
+
+        @keyframes wave {
+            0%, 40%, 100% { transform: scaleY(0.4); }
+            20% { transform: scaleY(1); }
+        }
+
+        .voice-chat-users {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .voice-user {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            margin-bottom: 5px;
+            background: rgba(40, 167, 69, 0.1);
+            border-radius: 8px;
+        }
+
+        .voice-user.speaking {
+            background: rgba(40, 167, 69, 0.2);
+            border: 1px solid #28a745;
+        }
+
         @media (max-width: 768px) {
             .sidebar {
                 display: none;
@@ -293,6 +389,14 @@
                 <div class="user-list" id="userList">
                     <!-- Users will be populated here -->
                 </div>
+
+                <!-- Voice Chat Users -->
+                <div class="voice-chat-users">
+                    <h4 style="margin-bottom: 10px; font-size: 14px; color: #495057;">🎤 กำลังใช้เสียง</h4>
+                    <div id="voiceUserList">
+                        <!-- Voice users will be populated here -->
+                    </div>
+                </div>
             </div>
 
             <!-- Main Chat Area -->
@@ -314,6 +418,23 @@
                 <!-- Typing Indicator -->
                 <div class="typing-indicator" id="typingIndicator" style="display: none;"></div>
 
+                <!-- Voice Controls -->
+                <div class="voice-controls">
+                    <button id="micBtn" class="mic-btn inactive" title="เปิด/ปิดไมค์">
+                        🎤
+                    </button>
+                    <div class="voice-status">
+                        <span id="voiceStatus">ไมค์ปิดอยู่</span>
+                        <div id="speakingIndicator" class="speaking-indicator" style="display: none;">
+                            <span>กำลังพูด</span>
+                            <div class="audio-wave"></div>
+                            <div class="audio-wave"></div>
+                            <div class="audio-wave"></div>
+                            <div class="audio-wave"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Input Area -->
                 <div class="input-area">
                     <input type="text" id="messageInput" class="message-input" placeholder="พิมพ์ข้อความ..." maxlength="500">
@@ -328,6 +449,10 @@
         let currentUser = '';
         let currentRoom = '';
         let typingTimer;
+        let isVoiceChatEnabled = false;
+        let localStream = null;
+        let peerConnections = new Map();
+        let voiceUsers = new Map();
 
         // DOM Elements
         const loginScreen = document.getElementById('loginScreen');
@@ -342,6 +467,10 @@
         const roomName = document.getElementById('roomName');
         const userCount = document.getElementById('userCount');
         const typingIndicator = document.getElementById('typingIndicator');
+        const micBtn = document.getElementById('micBtn');
+        const voiceStatus = document.getElementById('voiceStatus');
+        const speakingIndicator = document.getElementById('speakingIndicator');
+        const voiceUserList = document.getElementById('voiceUserList');
 
         // Initialize Socket.IO
         function initSocket() {
@@ -351,6 +480,248 @@
             socket.on('connect', () => {
                 console.log('Connected to server');
             });
+
+        // Voice Chat Functions
+        micBtn.addEventListener('click', toggleVoiceChat);
+
+        async function toggleVoiceChat() {
+            if (!isVoiceChatEnabled) {
+                await startVoiceChat();
+            } else {
+                stopVoiceChat();
+            }
+        }
+
+        async function startVoiceChat() {
+            try {
+                // Request microphone permission
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    } 
+                });
+
+                isVoiceChatEnabled = true;
+                micBtn.className = 'mic-btn active';
+                voiceStatus.textContent = 'ไมค์เปิดอยู่';
+                
+                // Setup voice activity detection
+                setupVoiceActivityDetection();
+                
+                // Notify server
+                socket.emit('voice-join', { username: currentUser });
+                
+                // Create peer connections for existing voice users
+                voiceUsers.forEach((user, userId) => {
+                    if (userId !== socket.id) {
+                        createPeerConnection(userId, true);
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error accessing microphone:', error);
+                alert('ไม่สามารถเข้าถึงไมโครโฟนได้ กรุณาอนุญาตการใช้งานไมโครโฟน');
+            }
+        }
+
+        function stopVoiceChat() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+
+            // Close all peer connections
+            peerConnections.forEach(pc => pc.close());
+            peerConnections.clear();
+
+            isVoiceChatEnabled = false;
+            micBtn.className = 'mic-btn inactive';
+            voiceStatus.textContent = 'ไมค์ปิดอยู่';
+            speakingIndicator.style.display = 'none';
+
+            // Notify server
+            socket.emit('voice-leave');
+        }
+
+        function setupVoiceActivityDetection() {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(localStream);
+            const analyser = audioContext.createAnalyser();
+            
+            analyser.fftSize = 256;
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            
+            source.connect(analyser);
+            
+            let isSpeaking = false;
+            const threshold = 50; // Adjust sensitivity
+            
+            function detectSpeech() {
+                analyser.getByteFrequencyData(dataArray);
+                
+                let sum = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    sum += dataArray[i];
+                }
+                const average = sum / bufferLength;
+                
+                const wasSpeaking = isSpeaking;
+                isSpeaking = average > threshold;
+                
+                if (isSpeaking !== wasSpeaking) {
+                    speakingIndicator.style.display = isSpeaking ? 'flex' : 'none';
+                    socket.emit('speaking-status', { isSpeaking, username: currentUser });
+                }
+                
+                if (isVoiceChatEnabled) {
+                    requestAnimationFrame(detectSpeech);
+                }
+            }
+            
+            detectSpeech();
+        }
+
+        async function handleVoiceUserJoined(data) {
+            voiceUsers.set(data.userId, data);
+            updateVoiceUserList();
+            
+            if (isVoiceChatEnabled && data.userId !== socket.id) {
+                // Create peer connection for new user
+                await createPeerConnection(data.userId, true);
+            }
+        }
+
+        function handleVoiceUserLeft(data) {
+            voiceUsers.delete(data.userId);
+            updateVoiceUserList();
+            
+            // Close peer connection
+            if (peerConnections.has(data.userId)) {
+                peerConnections.get(data.userId).close();
+                peerConnections.delete(data.userId);
+            }
+        }
+
+        async function createPeerConnection(userId, isInitiator) {
+            const configuration = {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            };
+
+            const peerConnection = new RTCPeerConnection(configuration);
+            peerConnections.set(userId, peerConnection);
+
+            // Add local stream
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+            }
+
+            // Handle remote stream
+            peerConnection.ontrack = (event) => {
+                const remoteAudio = document.createElement('audio');
+                remoteAudio.srcObject = event.streams[0];
+                remoteAudio.autoplay = true;
+                remoteAudio.id = `audio-${userId}`;
+                document.body.appendChild(remoteAudio);
+            };
+
+            // Handle ICE candidates
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('voice-ice-candidate', {
+                        targetUserId: userId,
+                        candidate: event.candidate
+                    });
+                }
+            };
+
+            // Create offer if initiator
+            if (isInitiator) {
+                try {
+                    const offer = await peerConnection.createOffer();
+                    await peerConnection.setLocalDescription(offer);
+                    socket.emit('voice-offer', {
+                        targetUserId: userId,
+                        offer: offer
+                    });
+                } catch (error) {
+                    console.error('Error creating offer:', error);
+                }
+            }
+
+            return peerConnection;
+        }
+
+        async function handleVoiceOffer(data) {
+            try {
+                const peerConnection = await createPeerConnection(data.fromUserId, false);
+                await peerConnection.setRemoteDescription(data.offer);
+                
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                
+                socket.emit('voice-answer', {
+                    targetUserId: data.fromUserId,
+                    answer: answer
+                });
+            } catch (error) {
+                console.error('Error handling offer:', error);
+            }
+        }
+
+        async function handleVoiceAnswer(data) {
+            try {
+                const peerConnection = peerConnections.get(data.fromUserId);
+                if (peerConnection) {
+                    await peerConnection.setRemoteDescription(data.answer);
+                }
+            } catch (error) {
+                console.error('Error handling answer:', error);
+            }
+        }
+
+        async function handleIceCandidate(data) {
+            try {
+                const peerConnection = peerConnections.get(data.fromUserId);
+                if (peerConnection) {
+                    await peerConnection.addIceCandidate(data.candidate);
+                }
+            } catch (error) {
+                console.error('Error handling ICE candidate:', error);
+            }
+        }
+
+        function updateSpeakingStatus(data) {
+            const voiceUser = voiceUserList.querySelector(`[data-user-id="${data.userId}"]`);
+            if (voiceUser) {
+                if (data.isSpeaking) {
+                    voiceUser.classList.add('speaking');
+                } else {
+                    voiceUser.classList.remove('speaking');
+                }
+            }
+        }
+
+        function updateVoiceUserList() {
+            voiceUserList.innerHTML = '';
+            voiceUsers.forEach((user, userId) => {
+                const userDiv = document.createElement('div');
+                userDiv.className = 'voice-user';
+                userDiv.setAttribute('data-user-id', userId);
+                userDiv.innerHTML = `
+                    <div class="user-status"></div>
+                    <span>🎤 ${escapeHtml(user.username)}</span>
+                `;
+                voiceUserList.appendChild(userDiv);
+            });
+        }
 
             // เมื่อมีผู้ใช้เข้าร่วม
             socket.on('user-joined', (data) => {
@@ -375,6 +746,31 @@
             // ผู้ใช้กำลังพิมพ์
             socket.on('user-typing', (data) => {
                 showTypingIndicator(data);
+            });
+
+            // Voice Chat Events
+            socket.on('voice-user-joined', (data) => {
+                handleVoiceUserJoined(data);
+            });
+
+            socket.on('voice-user-left', (data) => {
+                handleVoiceUserLeft(data);
+            });
+
+            socket.on('voice-offer', async (data) => {
+                await handleVoiceOffer(data);
+            });
+
+            socket.on('voice-answer', async (data) => {
+                await handleVoiceAnswer(data);
+            });
+
+            socket.on('voice-ice-candidate', async (data) => {
+                await handleIceCandidate(data);
+            });
+
+            socket.on('user-speaking', (data) => {
+                updateSpeakingStatus(data);
             });
         }
 
@@ -481,6 +877,10 @@
 
         // Leave Room
         function leaveRoom() {
+            if (isVoiceChatEnabled) {
+                stopVoiceChat();
+            }
+            
             if (socket) {
                 socket.disconnect();
             }
@@ -488,6 +888,8 @@
             chatContainer.style.display = 'none';
             messagesDiv.innerHTML = '';
             userList.innerHTML = '';
+            voiceUserList.innerHTML = '';
+            voiceUsers.clear();
             usernameInput.value = '';
             roomInput.value = '';
             currentUser = '';
@@ -503,6 +905,9 @@
 
         // Handle connection errors
         window.addEventListener('beforeunload', () => {
+            if (isVoiceChatEnabled) {
+                stopVoiceChat();
+            }
             if (socket) {
                 socket.disconnect();
             }

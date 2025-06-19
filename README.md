@@ -138,10 +138,3 @@ app.use(rateLimit({
   max: 100 // limit each IP to 100 requests per windowMs
 }));
 ```
-
-## Troubleshooting
-
-### ปัญหาที่พบบ่อย
-
-1. **แอพไม่เชื่อมต่อ**
-   - ต

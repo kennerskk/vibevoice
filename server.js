@@ -210,6 +210,12 @@ io.on('connection', (socket) => {
   });
 });
 
+setInterval(() => {
+  fetch('https://vibevoice.onrender.com')
+    .then(() => console.log('Pinged self to keep alive'))
+    .catch(err => console.error('Ping failed:', err));
+}, 10 * 60 * 1000); // 10 นาที
+
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

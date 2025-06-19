@@ -7,22 +7,34 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-let clients = [];
+const clients = new Map();
 
 wss.on("connection", (ws) => {
-  clients.push(ws);
+  let clientId = null;
 
-  ws.on("message", (message) => {
-    if (message.toString() === '{"type":"ping"}') return;
-    clients.forEach((client) => {
-      if (client !== ws && client.readyState === WebSocket.OPEN) {
-        client.send(message);
+  ws.on("message", (msg) => {
+    const data = JSON.parse(msg);
+    if (data.type === "join") {
+      clientId = data.id;
+      clients.set(clientId, ws);
+      for (const [id, client] of clients.entries()) {
+        if (client !== ws && client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({ type: "joined", id: clientId }));
+        }
       }
-    });
+      return;
+    }
+
+    if (data.target && clients.has(data.target)) {
+      const targetSocket = clients.get(data.target);
+      if (targetSocket.readyState === WebSocket.OPEN) {
+        targetSocket.send(JSON.stringify({ ...data, from: clientId }));
+      }
+    }
   });
 
   ws.on("close", () => {
-    clients = clients.filter((c) => c !== ws);
+    if (clientId) clients.delete(clientId);
   });
 });
 

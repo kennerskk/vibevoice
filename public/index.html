@@ -2,76 +2,81 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Ultra Fast Voice Chat</title>
+  <title>Voice Chat - Multi Peer</title>
 </head>
 <body>
-  <h1>🎤 Voice Chat</h1>
-  <p>เปิดไมค์แล้วคุยกับเพื่อนทันที!</p>
+  <h1>🔊 Multi-Peer Voice Chat</h1>
+  <p>พูดคุยกับหลายคนพร้อมกัน</p>
 
   <script>
+    const id = crypto.randomUUID();
+    const peers = {};
     const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host);
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-    });
-    
-    navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false
-      }
-    }).then(stream => {
-      const localAudio = document.createElement("audio");
-      localAudio.srcObject = stream;
-      localAudio.autoplay = true;
-      document.body.appendChild(localAudio);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "join", id }));
+    };
+
+    async function createPeerConnection(peerId) {
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+      });
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        }
+      });
 
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
-      return pc.createOffer();
-    }).then(offer => {
-      return pc.setLocalDescription(offer).then(() => {
-        ws.send(JSON.stringify({ type: "offer", sdp: offer }));
-      });
-    });
 
-    ws.onmessage = async (message) => {
-      const data = JSON.parse(message.data);
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          ws.send(JSON.stringify({ type: "ice", target: peerId, candidate: event.candidate }));
+        }
+      };
+
+      pc.ontrack = (event) => {
+        const audio = document.createElement("audio");
+        audio.srcObject = event.streams[0];
+        audio.autoplay = true;
+        document.body.appendChild(audio);
+      };
+
+      peers[peerId] = pc;
+      return { pc, stream };
+    }
+
+    ws.onmessage = async (msg) => {
+      const data = JSON.parse(msg.data);
+
+      if (data.from === id) return; // Don't process self messages
+
       if (data.type === "offer") {
+        const { pc } = await createPeerConnection(data.from);
         await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false
-          }
-        });
-        stream.getTracks().forEach(track => pc.addTrack(track, stream));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        ws.send(JSON.stringify({ type: "answer", sdp: answer }));
-      } else if (data.type === "answer") {
-        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-      } else if (data.candidate) {
-        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        ws.send(JSON.stringify({ type: "answer", target: data.from, sdp: answer, from: id }));
+      }
+
+      else if (data.type === "answer" && peers[data.from]) {
+        await peers[data.from].setRemoteDescription(new RTCSessionDescription(data.sdp));
+      }
+
+      else if (data.type === "ice" && peers[data.from]) {
+        await peers[data.from].addIceCandidate(new RTCIceCandidate(data.candidate));
+      }
+
+      else if (data.type === "joined" && data.id !== id) {
+        const { pc } = await createPeerConnection(data.id);
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        ws.send(JSON.stringify({ type: "offer", target: data.id, sdp: offer, from: id }));
       }
     };
-
-    pc.ontrack = (event) => {
-      const audio = document.createElement("audio");
-      audio.srcObject = event.streams[0];
-      audio.autoplay = true;
-      document.body.appendChild(audio);
-    };
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        ws.send(JSON.stringify({ candidate: event.candidate }));
-      }
-    };
-
-    setInterval(() => {
-      ws.send(JSON.stringify({ type: "ping" }));
-    }, 10000);
   </script>
 </body>
 </html>

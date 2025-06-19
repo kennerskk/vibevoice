@@ -1,7 +1,7 @@
 {
-  "name": "voice-chat-app",
+  "name": "voice-chat-multi-peer",
   "version": "1.0.0",
-  "description": "Ultra fast voice chat via WebRTC and WebSocket",
+  "description": "Multi-peer WebRTC voice chat",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

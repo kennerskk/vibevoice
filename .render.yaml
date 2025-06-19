@@ -1,9 +1,6 @@
 services:
   - type: web
-    name: voice-chat
+    name: voice-chat-multi-peer
     env: node
     buildCommand: npm install
     startCommand: npm start
-    envVars:
-      - key: PORT
-        value: 10000

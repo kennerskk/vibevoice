@@ -1,82 +1,512 @@
 <!DOCTYPE html>
-<html>
+<html lang="th">
 <head>
-  <meta charset="UTF-8">
-  <title>Voice Chat - Multi Peer</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แชทออนไลน์กับเพื่อน</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 1000px;
+            height: 80vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .login-screen {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            padding: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .login-form {
+            background: rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            background: rgba(255,255,255,0.9);
+        }
+
+        .btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+            width: 100%;
+        }
+
+        .btn:hover {
+            background: #ff5252;
+        }
+
+        .chat-container {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        .sidebar {
+            width: 250px;
+            background: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar h3 {
+            margin-bottom: 20px;
+            color: #495057;
+            font-size: 18px;
+        }
+
+        .user-list {
+            flex: 1;
+        }
+
+        .user-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 5px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .user-status {
+            width: 10px;
+            height: 10px;
+            background: #28a745;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .chat-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .room-info h2 {
+            color: #495057;
+            margin: 0;
+        }
+
+        .room-info p {
+            color: #6c757d;
+            margin: 5px 0 0 0;
+            font-size: 14px;
+        }
+
+        .messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .message.own {
+            justify-content: flex-end;
+        }
+
+        .message-content {
+            max-width: 70%;
+            background: white;
+            padding: 12px 16px;
+            border-radius: 18px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .message.own .message-content {
+            background: #007bff;
+            color: white;
+        }
+
+        .message-info {
+            font-size: 12px;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+
+        .message.own .message-info {
+            color: rgba(255,255,255,0.8);
+        }
+
+        .system-message {
+            text-align: center;
+            color: #6c757d;
+            font-style: italic;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+
+        .typing-indicator {
+            font-style: italic;
+            color: #6c757d;
+            padding: 10px 20px;
+            font-size: 14px;
+        }
+
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            gap: 10px;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #dee2e6;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .message-input:focus {
+            border-color: #007bff;
+        }
+
+        .send-btn {
+            padding: 12px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+
+        .send-btn:hover {
+            background: #0056b3;
+        }
+
+        .send-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            
+            .container {
+                height: 100vh;
+                width: 100%;
+                border-radius: 0;
+            }
+        }
+    </style>
 </head>
 <body>
-  <h1>🔊 Multi-Peer Voice Chat</h1>
-  <p>พูดคุยกับหลายคนพร้อมกัน</p>
+    <div class="container">
+        <!-- Login Screen -->
+        <div class="login-screen" id="loginScreen">
+            <div class="login-form">
+                <h1 style="margin-bottom: 30px; text-align: center;">แชทออนไลน์กับเพื่อน</h1>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="username">ชื่อผู้ใช้:</label>
+                        <input type="text" id="username" required maxlength="20" placeholder="กรอกชื่อของคุณ">
+                    </div>
+                    <div class="form-group">
+                        <label for="room">ห้องแชท:</label>
+                        <input type="text" id="room" required maxlength="20" placeholder="เช่น: เพื่อน, งาน, ครอบครัว">
+                    </div>
+                    <button type="submit" class="btn">เข้าร่วมแชท</button>
+                </form>
+            </div>
+        </div>
 
-  <script>
-    const id = crypto.randomUUID();
-    const peers = {};
-    const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host);
+        <!-- Chat Interface -->
+        <div class="chat-container" id="chatContainer">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <h3>ผู้ใช้ออนไลน์</h3>
+                <div class="user-list" id="userList">
+                    <!-- Users will be populated here -->
+                </div>
+            </div>
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "join", id }));
-    };
+            <!-- Main Chat Area -->
+            <div class="chat-main">
+                <!-- Chat Header -->
+                <div class="chat-header">
+                    <div class="room-info">
+                        <h2 id="roomName">ห้องแชท</h2>
+                        <p id="userCount">0 คนออนไลน์</p>
+                    </div>
+                    <button class="btn" onclick="leaveRoom()" style="width: auto; padding: 8px 16px; font-size: 14px;">ออกจากห้อง</button>
+                </div>
 
-    async function createPeerConnection(peerId) {
-      const pc = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-      });
+                <!-- Messages -->
+                <div class="messages" id="messages">
+                    <!-- Messages will be populated here -->
+                </div>
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false
+                <!-- Typing Indicator -->
+                <div class="typing-indicator" id="typingIndicator" style="display: none;"></div>
+
+                <!-- Input Area -->
+                <div class="input-area">
+                    <input type="text" id="messageInput" class="message-input" placeholder="พิมพ์ข้อความ..." maxlength="500">
+                    <button id="sendBtn" class="send-btn">ส่ง</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socket;
+        let currentUser = '';
+        let currentRoom = '';
+        let typingTimer;
+
+        // DOM Elements
+        const loginScreen = document.getElementById('loginScreen');
+        const chatContainer = document.getElementById('chatContainer');
+        const loginForm = document.getElementById('loginForm');
+        const usernameInput = document.getElementById('username');
+        const roomInput = document.getElementById('room');
+        const messagesDiv = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const userList = document.getElementById('userList');
+        const roomName = document.getElementById('roomName');
+        const userCount = document.getElementById('userCount');
+        const typingIndicator = document.getElementById('typingIndicator');
+
+        // Initialize Socket.IO
+        function initSocket() {
+            socket = io();
+
+            // เมื่อเชื่อมต่อสำเร็จ
+            socket.on('connect', () => {
+                console.log('Connected to server');
+            });
+
+            // เมื่อมีผู้ใช้เข้าร่วม
+            socket.on('user-joined', (data) => {
+                addSystemMessage(data.message, data.timestamp);
+            });
+
+            // เมื่อมีผู้ใช้ออก
+            socket.on('user-left', (data) => {
+                addSystemMessage(data.message, data.timestamp);
+            });
+
+            // เมื่อได้รับข้อความ
+            socket.on('receive-message', (message) => {
+                addMessage(message);
+            });
+
+            // อัพเดทรายชื่อผู้ใช้
+            socket.on('users-update', (users) => {
+                updateUserList(users);
+            });
+
+            // ผู้ใช้กำลังพิมพ์
+            socket.on('user-typing', (data) => {
+                showTypingIndicator(data);
+            });
         }
-      });
 
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+        // Login Form Submit
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const username = usernameInput.value.trim();
+            const room = roomInput.value.trim();
 
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          ws.send(JSON.stringify({ type: "ice", target: peerId, candidate: event.candidate }));
+            if (username && room) {
+                currentUser = username;
+                currentRoom = room;
+                
+                // Initialize socket and join room
+                initSocket();
+                socket.emit('join', { username, room });
+                
+                // Switch to chat interface
+                loginScreen.style.display = 'none';
+                chatContainer.style.display = 'flex';
+                roomName.textContent = `ห้อง: ${room}`;
+                messageInput.focus();
+            }
+        });
+
+        // Send Message
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (message && socket) {
+                socket.emit('send-message', { message });
+                messageInput.value = '';
+                sendBtn.disabled = true;
+                setTimeout(() => sendBtn.disabled = false, 100);
+            }
         }
-      };
 
-      pc.ontrack = (event) => {
-        const audio = document.createElement("audio");
-        audio.srcObject = event.streams[0];
-        audio.autoplay = true;
-        document.body.appendChild(audio);
-      };
+        sendBtn.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
 
-      peers[peerId] = pc;
-      return { pc, stream };
-    }
+        // Typing Indicator
+        messageInput.addEventListener('input', () => {
+            if (socket) {
+                socket.emit('typing', { isTyping: true });
+                clearTimeout(typingTimer);
+                typingTimer = setTimeout(() => {
+                    socket.emit('typing', { isTyping: false });
+                }, 1000);
+            }
+        });
 
-    ws.onmessage = async (msg) => {
-      const data = JSON.parse(msg.data);
+        // Add Message to Chat
+        function addMessage(message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${message.userId === socket.id ? 'own' : ''}`;
+            
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    <div class="message-info">${message.username} • ${message.timestamp}</div>
+                    <div>${escapeHtml(message.message)}</div>
+                </div>
+            `;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
 
-      if (data.from === id) return; // Don't process self messages
+        // Add System Message
+        function addSystemMessage(message, timestamp) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'system-message';
+            messageDiv.textContent = `${message} (${timestamp})`;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
 
-      if (data.type === "offer") {
-        const { pc } = await createPeerConnection(data.from);
-        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        ws.send(JSON.stringify({ type: "answer", target: data.from, sdp: answer, from: id }));
-      }
+        // Update User List
+        function updateUserList(users) {
+            userList.innerHTML = '';
+            users.forEach(user => {
+                const userDiv = document.createElement('div');
+                userDiv.className = 'user-item';
+                userDiv.innerHTML = `
+                    <div class="user-status"></div>
+                    <span>${escapeHtml(user.username)}</span>
+                `;
+                userList.appendChild(userDiv);
+            });
+            userCount.textContent = `${users.length} คนออนไลน์`;
+        }
 
-      else if (data.type === "answer" && peers[data.from]) {
-        await peers[data.from].setRemoteDescription(new RTCSessionDescription(data.sdp));
-      }
+        // Show Typing Indicator
+        function showTypingIndicator(data) {
+            if (data.isTyping) {
+                typingIndicator.textContent = `${data.username} กำลังพิมพ์...`;
+                typingIndicator.style.display = 'block';
+            } else {
+                typingIndicator.style.display = 'none';
+            }
+        }
 
-      else if (data.type === "ice" && peers[data.from]) {
-        await peers[data.from].addIceCandidate(new RTCIceCandidate(data.candidate));
-      }
+        // Leave Room
+        function leaveRoom() {
+            if (socket) {
+                socket.disconnect();
+            }
+            loginScreen.style.display = 'flex';
+            chatContainer.style.display = 'none';
+            messagesDiv.innerHTML = '';
+            userList.innerHTML = '';
+            usernameInput.value = '';
+            roomInput.value = '';
+            currentUser = '';
+            currentRoom = '';
+        }
 
-      else if (data.type === "joined" && data.id !== id) {
-        const { pc } = await createPeerConnection(data.id);
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        ws.send(JSON.stringify({ type: "offer", target: data.id, sdp: offer, from: id }));
-      }
-    };
-  </script>
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Handle connection errors
+        window.addEventListener('beforeunload', () => {
+            if (socket) {
+                socket.disconnect();
+            }
+        });
+    </script>
 </body>
 </html>

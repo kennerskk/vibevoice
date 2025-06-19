@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Ultra Fast Voice Chat</title>
+</head>
+<body>
+  <h1>🎤 Voice Chat</h1>
+  <p>เปิดไมค์แล้วคุยกับเพื่อนทันที!</p>
+
+  <script>
+    const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host);
+    const pc = new RTCPeerConnection();
+    
+    navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      }
+    }).then(stream => {
+      const localAudio = document.createElement("audio");
+      localAudio.srcObject = stream;
+      localAudio.autoplay = true;
+      document.body.appendChild(localAudio);
+
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      return pc.createOffer();
+    }).then(offer => {
+      return pc.setLocalDescription(offer).then(() => {
+        ws.send(JSON.stringify({ type: "offer", sdp: offer }));
+      });
+    });
+
+    ws.onmessage = async (message) => {
+      const data = JSON.parse(message.data);
+      if (data.type === "offer") {
+        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          }
+        });
+        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        ws.send(JSON.stringify({ type: "answer", sdp: answer }));
+      } else if (data.type === "answer") {
+        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      } else if (data.candidate) {
+        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+      }
+    };
+
+    pc.ontrack = (event) => {
+      const audio = document.createElement("audio");
+      audio.srcObject = event.streams[0];
+      audio.autoplay = true;
+      document.body.appendChild(audio);
+    };
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        ws.send(JSON.stringify({ candidate: event.candidate }));
+      }
+    };
+  </script>
+</body>
+</html>

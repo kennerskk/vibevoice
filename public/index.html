@@ -10,7 +10,9 @@
 
   <script>
     const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host);
-    const pc = new RTCPeerConnection();
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+    });
     
     navigator.mediaDevices.getUserMedia({
       audio: {
@@ -66,6 +68,10 @@
         ws.send(JSON.stringify({ candidate: event.candidate }));
       }
     };
+
+    setInterval(() => {
+      ws.send(JSON.stringify({ type: "ping" }));
+    }, 10000);
   </script>
 </body>
 </html>

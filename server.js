@@ -13,7 +13,7 @@ wss.on("connection", (ws) => {
   clients.push(ws);
 
   ws.on("message", (message) => {
-    // broadcast ไปยัง client คนอื่น
+    if (message.toString() === '{"type":"ping"}') return;
     clients.forEach((client) => {
       if (client !== ws && client.readyState === WebSocket.OPEN) {
         client.send(message);
@@ -24,16 +24,8 @@ wss.on("connection", (ws) => {
   ws.on("close", () => {
     clients = clients.filter((c) => c !== ws);
   });
-
-  ws.onopen = () => {
-    console.log("WebSocket connected");
-  };
-  ws.onerror = (err) => {
-    alert("WebSocket error: " + err.message);
-  };
 });
 
-// ให้ client เข้าเว็บได้
 app.use(express.static(path.join(__dirname, "public")));
 
 const PORT = process.env.PORT || 3000;

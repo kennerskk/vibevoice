@@ -1,6 +1,0 @@
-services:
-  - type: web
-    name: voice-chat-multi-peer
-    env: node
-    buildCommand: npm install
-    startCommand: npm start

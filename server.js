@@ -165,11 +165,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ส่งเสียงไปให้ทุกคน ยกเว้นคนที่ส่งมา
-  socket.on('voice', (data) => {
-    socket.broadcast.emit('voice', data);
-  });
-
   // ผู้ใช้ออกจากระบบ
   socket.on('disconnect', () => {
     const user = users.get(socket.id);
